@@ -11,6 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Unzip project
+        run: unzip -o futsal-league.zip
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -21,16 +24,19 @@ jobs:
           java-version: 17
 
       - name: Install dependencies
+        working-directory: futsal-league
         run: npm install
 
       - name: Add Android platform
+        working-directory: futsal-league
         run: npx cap add android
 
       - name: Sync web files
+        working-directory: futsal-league
         run: npx cap sync android
 
       - name: Build debug APK
-        working-directory: android
+        working-directory: futsal-league/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -39,4 +45,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: futsal-league-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: futsal-league/android/app/build/outputs/apk/debug/app-debug.apk
