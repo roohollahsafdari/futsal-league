@@ -11,8 +11,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unzip project
-        run: unzip -o futsal-league.zip
+      # اگر زیپ پروژه در ریشه مخزن باشد باز می‌شود؛ وگرنه خود مخزن ساخته می‌شود
+      - name: Prepare project
+        run: |
+          set -e
+          mkdir -p build
+          ZIP=$(ls -t *.zip 2>/dev/null | head -1 || true)
+          if [ -n "$ZIP" ]; then
+            echo "Using zip: $ZIP"
+            mkdir -p /tmp/unz
+            unzip -q -o "$ZIP" -d /tmp/unz
+            CFG=$(find /tmp/unz -name capacitor.config.json -not -path '*/node_modules/*' | head -1)
+            [ -n "$CFG" ] || { echo "capacitor.config.json not found in zip"; exit 1; }
+            cp -a "$(dirname "$CFG")/." build/
+          else
+            echo "No zip, using repository files"
+            [ -d www ] || { echo "www folder not found"; exit 1; }
+            tar --exclude=./build --exclude=./.git -cf - . | tar -xf - -C build
+          fi
+          echo "---- APP VERSION ----"
+          grep -n "const VERSION" build/www/app.js
+          ls build
 
       - uses: actions/setup-node@v4
         with:
@@ -24,19 +43,25 @@ jobs:
           java-version: 17
 
       - name: Install dependencies
-        working-directory: futsal-league
+        working-directory: build
         run: npm install
 
       - name: Add Android platform
-        working-directory: futsal-league
+        working-directory: build
         run: npx cap add android
 
+      - name: Storage permission (Android 9 and below)
+        working-directory: build
+        run: |
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />#' android/app/src/main/AndroidManifest.xml
+          grep -n "uses-permission" android/app/src/main/AndroidManifest.xml
+
       - name: Sync web files
-        working-directory: futsal-league
+        working-directory: build
         run: npx cap sync android
 
       - name: Build debug APK
-        working-directory: futsal-league/android
+        working-directory: build/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -45,4 +70,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: futsal-league-apk
-          path: futsal-league/android/app/build/outputs/apk/debug/app-debug.apk
+          path: build/android/app/build/outputs/apk/debug/app-debug.apk
